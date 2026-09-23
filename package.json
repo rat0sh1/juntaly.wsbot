@@ -1,0 +1,25 @@
+{
+  "name": "juntaly-wsbot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/whatsapp.js",
+    "chat": "node --env-file-if-exists=.env src/cli.js chat",
+    "ingest": "node --env-file-if-exists=.env src/cli.js ingest",
+    "tickets": "node --env-file-if-exists=.env src/cli.js tickets",
+    "admin": "node --env-file-if-exists=.env src/cli.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "adm-zip": "0.6.1",
+    "fast-xml-parser": "^5.0.0",
+    "pdf-parse": "^2.4.5",
+    "pino": "^10.0.0",
+    "qrcode": "^1.5.4"
+  }
+}
