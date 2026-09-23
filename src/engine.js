@@ -1,8 +1,9 @@
 import { retrieve } from './knowledge.js';
-import { conversationCategory, salesHandoffRequested } from './conversation.js';
+import { conversationCategory, salesHandoffRequested, physicalFault } from './conversation.js';
 
 export const HANDOFF = {
   support: 'Dejé tu consulta pendiente para atención técnica y pausé las respuestas automáticas. Una persona podrá continuar por este mismo chat. Puedes dejar el nombre del condominio y una descripción del problema; no compartas contraseñas ni códigos de acceso.',
+  physical: 'Entiendo, es una falla del equipo físico del condominio y requiere revisión técnica. Dejé tu reporte pendiente para el equipo técnico y pausé las respuestas automáticas; una persona continuará por este mismo chat. Indica el nombre del condominio, qué equipo falla y desde cuándo. Si es una urgencia de seguridad, avisa también a la administración o vigilancia del condominio.',
   sales: 'Dejé tu consulta pendiente para el equipo de ventas y pausé las respuestas automáticas. Una persona podrá continuar por este mismo chat. Puedes dejar tu nombre, condominio y qué necesitas implementar.',
 };
 // Sin pausa: al renovarse el límite diario el bot vuelve a responder solo.
@@ -46,6 +47,7 @@ export class Engine {
       let result;
       let chunks = [];
       if (media) result = { action: 'handoff', category: 'support', reason: 'Audio/imagen/documento entrante: revisar manualmente.' };
+      else if (physicalFault(text)) result = { action: 'handoff', category: 'support', notice: 'physical', reason: `Falla de módulo físico: ${text.slice(0, 200)}` };
       else if (explicitHuman(text)) result = { action: 'handoff', category, reason: 'La persona solicitó atención humana.' };
       else if (text.length > 4000) result = { action: 'handoff', category: 'support', reason: 'Mensaje demasiado largo para el piloto.' };
       else if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[!.,\s]*$/.test(normalize(text).trim())) {
@@ -81,7 +83,7 @@ export class Engine {
       let references = [];
       if (result.action === 'handoff') {
         this.store.handoff(jid, result.category, result.reason);
-        reply = HANDOFF[result.category];
+        reply = HANDOFF[result.notice || result.category];
       } else {
         reply = result.reply;
         references = [...new Set(chunks.filter(c => result.sources?.includes(c.id)).map(c => `${c.source}, pág./diap. ${c.page}`))];

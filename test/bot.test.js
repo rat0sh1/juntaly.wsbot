@@ -9,7 +9,7 @@ import { OpenRouter, validateAnswer } from '../src/ai.js';
 import { config } from '../src/config.js';
 import { allowedMessage, isDirect, messageText, isMedia, acceptUpsert } from '../src/transport.js';
 import { acquireLock } from '../src/lock.js';
-import { conversationCategory, salesHandoffRequested } from '../src/conversation.js';
+import { conversationCategory, salesHandoffRequested, physicalFault } from '../src/conversation.js';
 
 const settings = { dailyLimit: 100, embeddingModel: '' };
 const salesAnswer = { reply: 'Juntaly integra administración, acceso, invitados y domótica. ¿Qué necesita tu condominio?', action: 'answer', category: 'sales', sources: [] };
@@ -249,4 +249,16 @@ test('bloqueo de sesión: rechaza otro proceso vivo y reutiliza uno propio o mue
   await fs.writeFile(file, '9');
   acquireLock(file, 8, () => false);
   assert.equal(await fs.readFile(file, 'utf8'), '8');
+});
+test('falla del equipo físico deriva sin preguntar por la app ni consultar la IA', async t => {
+  const h = harness(t, () => { throw new Error('No debe llamar IA'); });
+  h.store.category('client', 'sales');
+  await h.receive('tengo un problema con el servicio del portón de mi edificio');
+  assert.equal(h.sent[0].reply, HANDOFF.physical);
+  assert.equal(h.store.chat('client').paused, 1);
+  assert.equal(h.store.chat('client').category, 'support');
+  assert.equal(h.store.tickets()[0].category, 'support');
+  for (const text of ['estoy parado frente al porton y no abre', 'el portón no abre', 'no hay agua en el edificio', 'la talanquera está dañada']) assert.ok(physicalFault(text), text);
+  for (const text of ['no puedo abrir el portón desde la app', 'cómo abro el portón', '¿qué problemas de agua resuelve Juntaly en el edificio?', 'quiero instalar portones con RFID en mi condominio']) assert.ok(!physicalFault(text), text);
+  assert.equal(conversationCategory('tengo un problema con el portón', 'sales'), 'support');
 });
