@@ -2,6 +2,7 @@ name: juntalywsbot
 
 services:
   bot:
+    image: ghcr.io/rat0sh1/juntaly.wsbot:latest
     build:
       context: .
       dockerfile: Dockerfile
