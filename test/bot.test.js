@@ -262,3 +262,11 @@ test('falla del equipo físico deriva sin preguntar por la app ni consultar la I
   for (const text of ['no puedo abrir el portón desde la app', 'cómo abro el portón', '¿qué problemas de agua resuelve Juntaly en el edificio?', 'quiero instalar portones con RFID en mi condominio']) assert.ok(!physicalFault(text), text);
   assert.equal(conversationCategory('tengo un problema con el portón', 'sales'), 'support');
 });
+test('«problema» solo cambia a soporte cuando es un reporte, y las preguntas hipotéticas no derivan', () => {
+  assert.equal(conversationCategory('¿Qué problema resuelve Juntaly en mi condominio?', 'sales'), 'sales');
+  assert.equal(conversationCategory('hay un problema con mi recibo', 'sales'), 'support');
+  assert.equal(conversationCategory('tengo problemas para entrar', 'sales'), 'support');
+  assert.ok(physicalFault('tengo problemas con el portón'));
+  assert.ok(physicalFault('¿qué hago si el portón no abre?'));
+  for (const text of ['¿el portón no funciona si no hay luz?', '¿qué pasa si se va la luz y el portón no abre?', 'en caso de que no hay agua ¿a quién llamo?']) assert.ok(!physicalFault(text), text);
+});

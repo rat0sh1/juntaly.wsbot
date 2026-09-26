@@ -56,7 +56,7 @@ async function connect() {
     if (update.qr && !stopped) {
       // Imprime el QR en la terminal para verlo con docker compose logs -f
       QRCode.toString(update.qr, { type: 'terminal', small: true }, (err, str) => {
-        if (!err && str) console.log('\n' + str + '\n');
+        if (!err && str && !stopped && socket === sock) console.log('\n' + str + '\n');
       });
       // Escritura síncrona del PNG al terminar la conversión, sin publicar el QR en un servidor.
       void QRCode.toBuffer(update.qr, { scale: 8 }).then(buffer => {
@@ -73,7 +73,8 @@ async function connect() {
       const code = update.lastDisconnect?.error?.output?.statusCode;
       if ([DisconnectReason.loggedOut, DisconnectReason.badSession, DisconnectReason.connectionReplaced, DisconnectReason.forbidden].includes(code)) {
         console.error(`Sesión detenida (${code}). Revisa WhatsApp. Se conservaron las credenciales; para vincular de nuevo usa otra AUTH_DIR.`);
-        void shutdown(1);
+        // Código 0: con restart on-failure, Docker no reintenta una sesión que requiere revisión humana.
+        void shutdown(0);
       } else reconnect();
     }
   });

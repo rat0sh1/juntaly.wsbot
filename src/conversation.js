@@ -2,7 +2,9 @@ import { isCommercialQuery } from './knowledge.js';
 const normalize = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 export function conversationCategory(text, previous) {
   const value = normalize(text);
-  if (physicalFault(text) || /\b(no puedo|no funciona|no abre|no sirve|no me deja|problema|error|falla|olvide mi contrasena|ayuda con mi|soporte tecnico)\b/.test(value) ||
+  // «Problema» solo cuenta como reporte («tengo un problema», «problema con…»), no en «¿qué problema resuelve Juntaly?».
+  if (physicalFault(text) || /\b(no puedo|no funciona|no abre|no sirve|no me deja|error|falla|olvide mi contrasena|ayuda con mi|soporte tecnico)\b/.test(value) ||
+      /\b((tengo|tenemos|hay|tuve|reporto|reportar) (un |una |algun |otro )?problemas?|problemas? (con|de acceso|para))\b/.test(value) ||
       /\b(instalar|instalo)\b.*\b(app|aplicacion)\b.*\b(celular|telefono|movil)\b/.test(value)) return 'support';
   return isCommercialQuery(text) ? 'sales' : previous;
 }
@@ -20,6 +22,12 @@ export function salesHandoffRequested(text, history) {
 export function physicalFault(text) {
   const value = normalize(text);
   return /\b(porton|portones|puerta|talanquera|barrera|antenas?|lector|tanques?|cisternas?|bomba|agua|luz|electricidad|energia|camaras?|vigilancia)\b/.test(value) &&
-    /\b(no (abre|cierra|funciona|sirve|lee|responde|prende|enciende|hay|llega|esta funcionando)|(tengo|tenemos|hay|reporto|reportar) (un |una |algun |otro )?(problema|falla|fallo)|fallando|estan? (danad\w*|rot[oa]s?|trabad\w*|atascad\w*|apagad\w*)|se (quedo|cayo|dano|fue)|sin (luz|agua))\b/.test(value) &&
-    !/\b(app|aplicacion|celular|telefono|movil|pantalla|desliz\w*|web|contrasena|usuario)\b/.test(value) && !isCommercialQuery(text);
+    /\b(no (abre|cierra|funciona|sirve|lee|responde|prende|enciende|hay|llega|esta funcionando)|(tengo|tenemos|hay|reporto|reportar) (un |una |algun |otro )?(problemas?|fallas?|fallos?)|fallando|estan? (danad\w*|rot[oa]s?|trabad\w*|atascad\w*|apagad\w*)|se (quedo|cayo|dano|fue)|sin (luz|agua))\b/.test(value) &&
+    !/\b(app|aplicacion|celular|telefono|movil|pantalla|desliz\w*|web|contrasena|usuario)\b/.test(value) && !isCommercialQuery(text) &&
+    !hypothetical(value);
+}
+// «¿Qué pasa si se va la luz?» o «¿el portón no funciona si no hay luz?» preguntan, no reportan una falla.
+function hypothetical(value) {
+  return /\b(que pasa|que sucede|que ocurre)\b.*\b(si|cuando)\b|\ben caso de\b/.test(value) ||
+    (value.includes('?') && /\b(si|cuando) (no hay|se va|se cae|se corta|falla)\b/.test(value));
 }

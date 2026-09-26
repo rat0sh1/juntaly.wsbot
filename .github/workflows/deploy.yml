@@ -4,7 +4,14 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
   workflow_dispatch: # Permite ejecutar el deploy manualmente desde GitHub Actions
+
+# Un deploy a la vez; uno nuevo espera a que termine el anterior.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -38,8 +45,6 @@ jobs:
     name: Build & Push Docker Image
     needs: test
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -89,11 +94,19 @@ jobs:
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
 
-            echo "🚀 Actualizando imagen desde GHCR..."
+            echo "📥 Sincronizando docker-compose.yml y archivos del commit ${{ github.sha }}..."
+            git fetch --quiet origin main
+            git reset --hard ${{ github.sha }}
+
+            # Imagen inmutable de este commit (tag sha-<7 caracteres> de metadata-action).
+            export IMAGE_TAG=sha-$(echo ${{ github.sha }} | cut -c1-7)
+
+            echo "🚀 Descargando $IMAGE_TAG desde GHCR..."
             docker compose pull bot
 
             echo "🔄 Reiniciando bot con la nueva versión..."
-            docker compose up -d bot
+            docker compose up -d --no-build bot
+            docker compose ps bot
 
             echo "🧹 Limpiando imágenes antiguas en desuso..."
             docker image prune -f

@@ -2,12 +2,14 @@ name: juntalywsbot
 
 services:
   bot:
-    image: ghcr.io/rat0sh1/juntaly.wsbot:latest
+    # El deploy fija IMAGE_TAG=sha-<commit>; sin variable usa la última imagen publicada.
+    image: ghcr.io/rat0sh1/juntaly.wsbot:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     container_name: juntaly-wsbot
-    restart: unless-stopped
+    # Reinicia ante caídas, pero no si WhatsApp cerró la sesión (el bot sale con código 0 para revisión).
+    restart: on-failure
     init: true
     env_file: .env
     environment:

@@ -11,7 +11,7 @@ La base está implementada; la validación con WhatsApp real, un modelo real y l
 - Preguntas de propietarios sobre pagos, recibos, cuotas, reservas o quejas («¿cómo pago la mensualidad?») se tratan como soporte aunque mencionen precios o mensualidad. La conversación conserva su contexto comercial en SQLite, incluso para respuestas cortas como «tiene como 100». Cantidades, datos de contacto y consultas de precio no autorizan una derivación. Si la IA intenta derivar prematuramente, se solicita una corrección; si insiste, el chat permanece activo y pide aclaración. Una consulta técnica explícita cambia al flujo de soporte.
 - **Persona:** una solicitud explícita o una decisión de la IA crea un pendiente y pausa el chat. El propietario puede seguir dejando información mientras está pausado.
 - **Operador:** responde desde el mismo WhatsApp vinculado (teléfono u otro dispositivo). El bot se pausa al detectar su intervención, incluso si el operador escribió mientras el bot estaba desconectado. Los mensajes de clientes recibidos durante la desconexión no se responden automáticamente. `!pausa` pausa; `!bot` reactiva y cierra los pendientes del chat. Estos comandos se escriben en el chat del cliente y son visibles para él. Para administrar sin enviarlos, usa la CLI local.
-- **Fallas de equipos físicos:** un reporte de falla del portón, antenas, luz, agua o vigilancia del edificio («estoy frente al portón y no abre») se deriva de inmediato a atención técnica, sin consultar la IA ni preguntar por la app. Si el mensaje menciona la app o el celular, se trata como consulta de la app con los manuales.
+- **Fallas de equipos físicos:** un reporte de falla del portón, antenas, luz, agua o vigilancia del edificio («estoy frente al portón y no abre») se deriva de inmediato a atención técnica, sin consultar la IA ni preguntar por la app. Si el mensaje menciona la app o el celular, se trata como consulta de la app con los manuales. Las preguntas hipotéticas («¿qué pasa si se va la luz?») no se derivan.
 - **Multimedia entrante:** audios, fotos y archivos del cliente se derivan a una persona. No se agregan a la base de conocimiento ni se envían a la IA.
 
 Los pendientes se consultan localmente con `npm run tickets`. **Este piloto no notifica automáticamente a otro número, no asigna operadores y no tiene bandeja web.** El equipo debe revisar WhatsApp y la lista de pendientes. Antes de atender público real, definir responsables y horarios. Si habrá varios operadores, la siguiente etapa puede integrar una bandeja de atención.
@@ -37,7 +37,7 @@ npm.cmd start
 
 Abre `auth_info/qr.png` y escanéalo desde WhatsApp → Dispositivos vinculados. El archivo se actualiza al renovarse el QR y se elimina al conectar. Si prueba un contacto no autorizado, la consola muestra sus identificadores: puedes agregarlos a `ALLOWED_JIDS` y reiniciar. No conviertas un `@lid` en número de teléfono: son identificadores distintos.
 
-No iniciar dos instancias con la misma sesión o base. El bloqueo de proceso evita dos instancias sobre la misma carpeta de autenticación. Si la sesión se invalida, el bot se detiene y conserva los archivos. Revisa los dispositivos vinculados; para una sesión nueva configura otra carpeta `AUTH_DIR`. No borres las credenciales para resolver una desconexión transitoria.
+No iniciar dos instancias con la misma sesión o base. El bloqueo de proceso evita dos instancias sobre la misma carpeta de autenticación. Si la sesión se invalida, el bot se detiene (código de salida 0) y conserva los archivos. Revisa los dispositivos vinculados; para una sesión nueva configura otra carpeta `AUTH_DIR`. No borres las credenciales para resolver una desconexión transitoria.
 
 ## Cargar manuales y presentaciones
 
@@ -87,16 +87,26 @@ El proyecto incluye configuración lista para producción en VPS Linux (Ubuntu/D
 - **Sin colisión de puertos:** No mapea puertos al host (la conexión a WhatsApp y OpenRouter es por WebSocket/HTTPS saliente).
 - **Límites de recursos:** Protege el VPS limitando la memoria a `350M` y `0.75` vCPUs.
 - **Persistencia en el host:** `./auth_info` (sesión Baileys) y `./data` (base SQLite con historial y tickets).
-- **Reinicio automático:** `restart: unless-stopped`.
-- **Código QR directo en terminal:** Los logs muestran el código QR en caracteres ASCII para escanearlo directamente desde la consola SSH sin necesidad de descargar imágenes.
+- **Reinicio automático ante caídas:** `restart: on-failure`. Si WhatsApp cierra o reemplaza la sesión, el bot sale con código 0 y **queda detenido** para revisión, en lugar de reintentar sin fin con credenciales inválidas. Revisa `docker compose logs bot` y vuelve a vincular.
+- **Código QR directo en terminal:** Los logs muestran el código QR en caracteres ASCII para escanearlo directamente desde la consola SSH sin necesidad de descargar imágenes. Los QR expiran en segundos; no sirven una vez vinculada la sesión.
 
-### Despliegue paso a paso
+### Despliegue automático (GitHub Actions)
 
-1. Ubica el proyecto en una carpeta dedicada (ej. `/opt/juntalywsbot`):
+Cada push a `main` que no sea solo documentación ejecuta `.github/workflows/deploy.yml`: pruebas → imagen en GHCR (`latest` y `sha-<commit>`) → por SSH en el VPS, `git reset --hard` al commit, `docker compose pull` y `up -d` con `IMAGE_TAG=sha-<commit>`.
+
+Requisitos:
+- Secrets del repositorio: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `DEPLOY_PATH` (y opcional `VPS_PORT`).
+- `DEPLOY_PATH` debe ser un clon de git de este repositorio (paso 1). `.env`, `data/`, `auth_info/` y `knowledge/` están en `.gitignore` y el deploy no los toca.
+- El VPS debe tener sesión en GHCR con un token con `read:packages`: `docker login ghcr.io -u rat0sh1`.
+
+Para volver a una versión anterior en el VPS: `IMAGE_TAG=sha-<commit> docker compose up -d --no-build bot`.
+
+### Instalación inicial paso a paso
+
+1. Clona el proyecto en una carpeta dedicada (ej. `/opt/juntalywsbot`):
    ```bash
-   sudo mkdir -p /opt/juntalywsbot
+   sudo git clone https://github.com/rat0sh1/juntaly.wsbot.git /opt/juntalywsbot
    cd /opt/juntalywsbot
-   sudo git clone https://github.com/rat0sh1/juntaly.wsbot.git .
    ```
 
 2. Crea las carpetas de persistencia y asigna permisos para el usuario `node` (UID 1000):
@@ -112,15 +122,15 @@ El proyecto incluye configuración lista para producción en VPS Linux (Ubuntu/D
    nano .env
    ```
 
-4. Construye la imagen e indexa manuales (si colocaste archivos en `knowledge/`):
+4. Descarga la imagen e indexa manuales (si colocaste archivos en `knowledge/`):
    ```bash
-   docker compose build
+   docker compose pull bot
    docker compose run --rm bot node src/cli.js ingest
    ```
 
 5. Inicia el bot y vincula WhatsApp escaneando el QR en los logs:
    ```bash
-   docker compose up -d
+   docker compose up -d --no-build
    docker compose logs -f bot
    ```
    *(Escanea el QR desde WhatsApp en tu móvil > Dispositivos vinculados > Vincular un dispositivo).*
