@@ -80,20 +80,74 @@ El historial y los pendientes se guardan en `data/juntaly.sqlite`. Los mensajes 
 
 Respalda `data/` y `auth_info/` con el bot detenido (incluidos archivos SQLite auxiliares, si existen). No hay política automática de borrado ni cifrado de disco en este piloto; protege el servidor y define retención antes de producción. Estas carpetas, `.env` y los documentos quedan fuera de Git y de la imagen Docker.
 
-## Docker en un VPS
+## Docker en un VPS (Producción)
 
-Configura `.env` y `knowledge/` en el servidor. La composición no publica puertos y conserva datos/sesión en volúmenes separados. No mezcla la base local de Windows con la del contenedor. Se usa reinicio manual en el piloto para poder revisar cierres de sesión.
+El proyecto incluye configuración lista para producción en VPS Linux (Ubuntu/Debian) mediante Docker Compose:
+- **Aislamiento total:** Contenedor `juntaly-wsbot`, proyecto `juntalywsbot` y red interna `juntaly_net` para convivir sin conflictos con otros servicios y bots.
+- **Sin colisión de puertos:** No mapea puertos al host (la conexión a WhatsApp y OpenRouter es por WebSocket/HTTPS saliente).
+- **Límites de recursos:** Protege el VPS limitando la memoria a `350M` y `0.75` vCPUs.
+- **Persistencia en el host:** `./auth_info` (sesión Baileys) y `./data` (base SQLite con historial y tickets).
+- **Reinicio automático:** `restart: unless-stopped`.
+- **Código QR directo en terminal:** Los logs muestran el código QR en caracteres ASCII para escanearlo directamente desde la consola SSH sin necesidad de descargar imágenes.
 
-```sh
-docker compose build
-docker compose run --rm bot node src/cli.js ingest
-docker compose up -d
-docker compose cp bot:/app/auth_info/qr.png ./qr.png
-docker compose logs -f bot
-docker compose exec bot node src/cli.js tickets
-```
+### Despliegue paso a paso
 
-El QR expira: repite la copia si el log anuncia uno nuevo. Protege y elimina la copia al vincular. Para actualizar documentos con el bot en marcha: `docker compose exec bot node src/cli.js ingest`.
+1. Ubica el proyecto en una carpeta dedicada (ej. `/opt/juntalywsbot`):
+   ```bash
+   sudo mkdir -p /opt/juntalywsbot
+   cd /opt/juntalywsbot
+   sudo git clone https://github.com/rat0sh1/juntaly.wsbot.git .
+   ```
+
+2. Crea las carpetas de persistencia y asigna permisos para el usuario `node` (UID 1000):
+   ```bash
+   sudo mkdir -p auth_info data knowledge
+   sudo chown -R 1000:1000 auth_info data knowledge
+   sudo chmod -R 755 auth_info data knowledge
+   ```
+
+3. Configura el archivo `.env`:
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+
+4. Construye la imagen e indexa manuales (si colocaste archivos en `knowledge/`):
+   ```bash
+   docker compose build
+   docker compose run --rm bot node src/cli.js ingest
+   ```
+
+5. Inicia el bot y vincula WhatsApp escaneando el QR en los logs:
+   ```bash
+   docker compose up -d
+   docker compose logs -f bot
+   ```
+   *(Escanea el QR desde WhatsApp en tu móvil > Dispositivos vinculados > Vincular un dispositivo).*
+
+### Comandos de administración en Docker
+
+- **Ver logs en tiempo real:**
+  ```bash
+  docker compose logs -f bot
+  ```
+- **Consultar tickets o chats derivados a humano:**
+  ```bash
+  docker compose exec bot node src/cli.js tickets
+  ```
+- **Reindexar nuevos manuales sin reiniciar el contenedor:**
+  ```bash
+  docker compose exec bot node src/cli.js ingest
+  ```
+- **Pausar / reactivar bot en un chat:**
+  ```bash
+  docker compose exec bot node src/cli.js pause "NUMERO@s.whatsapp.net"
+  docker compose exec bot node src/cli.js resume "NUMERO@s.whatsapp.net"
+  ```
+- **Monitorear uso de recursos (RAM / CPU):**
+  ```bash
+  docker stats juntaly-wsbot
+  ```
 
 ## Verificación y origen
 

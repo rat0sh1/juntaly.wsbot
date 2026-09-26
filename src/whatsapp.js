@@ -54,6 +54,10 @@ async function connect() {
   sock.ev.on('creds.update', () => void saveCreds().catch(() => { console.error('No se pudieron guardar las credenciales.'); void shutdown(1); }));
   sock.ev.on('connection.update', update => {
     if (update.qr && !stopped) {
+      // Imprime el QR en la terminal para verlo con docker compose logs -f
+      QRCode.toString(update.qr, { type: 'terminal', small: true }, (err, str) => {
+        if (!err && str) console.log('\n' + str + '\n');
+      });
       // Escritura síncrona del PNG al terminar la conversión, sin publicar el QR en un servidor.
       void QRCode.toBuffer(update.qr, { scale: 8 }).then(buffer => {
         if (!stopped && socket === sock) { fs.writeFileSync(qrPath, buffer, { mode: 0o600 }); console.log(`Escanea el QR en ${qrPath} desde WhatsApp > Dispositivos vinculados.`); }

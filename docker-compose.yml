@@ -1,0 +1,36 @@
+name: juntalywsbot
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: juntaly-wsbot
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /app/data
+      AUTH_DIR: /app/auth_info
+      KNOWLEDGE_DIR: /app/knowledge
+    volumes:
+      # Persistencia de credenciales de WhatsApp (Baileys multi-file auth)
+      - ./auth_info:/app/auth_info
+      # Base de datos SQLite (historial, contexto y tickets)
+      - ./data:/app/data
+      # Manuales aprobados para consulta del bot (PDF, PPTX, TXT, MD) en solo lectura
+      - ./knowledge:/app/knowledge:ro
+    # No requiere publicar puertos: Baileys se conecta saliente hacia WhatsApp Web vía WebSocket/TLS (443)
+    # y las consultas de IA se hacen salientes por HTTPS a OpenRouter. Esto garantiza cero colisiones con
+    # los puertos en uso (3000, 3001, 5432, 8000).
+    # Si a futuro agregas un panel web o webhook, expón un puerto libre (ej. "8080:8080" o "3050:3050").
+    mem_limit: 350m
+    cpus: 0.75
+    networks:
+      - juntaly_net
+
+networks:
+  juntaly_net:
+    name: juntaly_net
+    driver: bridge
